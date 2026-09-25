@@ -2,6 +2,25 @@ import os
 import threading
 import time
 from flask import Flask, jsonify
+import psycopg2
+
+DB = dict(
+    host="127.0.0.1",
+    dbname="sensores",
+    user="sensor_user",
+    password=os.environ["DB_PASSWORD"],
+)
+
+def conectar():
+    while True:
+        try:
+            conn = psycopg2.connect(**DB)
+            conn.autocommit = True
+            return conn
+        except psycopg2.OperationalError as e:
+            print(f"falha ao conectar no banco: {e}")
+            time.sleep(10)
+
 
 app = Flask(__name__)
 ultima_leitura = {"temperatura": None, "umidade": None, "timestamp": None}
@@ -27,14 +46,26 @@ def ler_sensor():
             time.sleep(2)
         raise RuntimeError("erro ao ler o sensor")
 
+def salvar(conn, temp, umid):
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO leituras (temperatura, umidade) VALUES (%s, %s)",
+            (temp, umid)
+        )
+
 def loop_leitura():
     global ultima_leitura
+    conn = conectar()
     while True:
         try:
             temp, umid = ler_sensor()
             ultima_leitura = {"temperatura": temp, "umidade": umid, "timestamp": time.time()}
+            salvar(conn, temp, umid)
         except RuntimeError as e:
             print(f"erro na leitura: {e}")
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            print("conexão com o banco caiu, reconectando")
+            conn = conectar()
         time.sleep(60)
 
 @app.route("/reading")
