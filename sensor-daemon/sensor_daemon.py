@@ -1,7 +1,8 @@
 import os
 import threading
 import time
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 import psycopg2
 
 DB = dict(
@@ -23,6 +24,7 @@ def conectar():
 
 
 app = Flask(__name__)
+CORS(app)
 ultima_leitura = {"temperatura": None, "umidade": None, "timestamp": None}
 
 MOCK = os.getenv("MOCK_SENSOR") == "1"
@@ -71,6 +73,27 @@ def loop_leitura():
 @app.route("/reading")
 def reading():
     return jsonify(ultima_leitura)
+
+@app.route("/readings")
+def readings():
+    limite = request.args.get("limit", default=100, type=int)
+    conn_local = psycopg2.connect(**DB)
+    try:
+        with conn_local.cursor() as cur:
+            cur.execute(
+                "SELECT momento, temperatura, umidade FROM leituras "
+                "ORDER BY momento DESC LIMIT %s",
+                (limite,),
+            )
+            rows = cur.fetchall()
+    finally:
+        conn_local.close()
+
+    return jsonify([
+        {"momento": r[0].isoformat(), "temperatura": r[1], "umidade": r[2]}
+        for r in rows
+    ])
+
 
 if __name__ == "__main__":
     thread = threading.Thread(target=loop_leitura, daemon=True)

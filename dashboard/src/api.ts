@@ -1,0 +1,13 @@
+import type { Leitura, LeituraAtual } from './types';
+
+const API_BASE = 'http://100.174.106.45:5000';
+
+export async function buscarLeituraAtual(): Promise<LeituraAtual> {
+  const resp = await fetch(`${API_BASE}/reading`);
+  return resp.json();
+}
+
+export async function buscarHistorico(limite = 200): Promise<Leitura[]> {
+  const resp = await fetch(`${API_BASE}/readings?limit=${limite}`);
+  return resp.json();
+}
