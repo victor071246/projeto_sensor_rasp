@@ -3,6 +3,7 @@ import threading
 import time
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from datetime import datetime, timedelta, timezone
 import psycopg2
 
 DB = dict(
@@ -76,24 +77,35 @@ def reading():
 
 @app.route("/readings")
 def readings():
-    limite = request.args.get("limit", default=100, type=int)
+    horas = request.args.get("horas", default=24, type=int)
+    desde = datetime.now(timezone.utc) - timedelta(hours=horas)
+
+    if horas <= 1:
+        intervalo = "minute"
+    elif horas <= 24:
+        intervalo = "hour"
+    else:
+        intervalo = "day"
+
     conn_local = psycopg2.connect(**DB)
     try:
         with conn_local.cursor() as cur:
             cur.execute(
-                "SELECT momento, temperatura, umidade FROM leituras "
-                "ORDER BY momento DESC LIMIT %s",
-                (limite,),
+                f"SELECT date_trunc(%s, momento) AS bucket, "
+                f"AVG(temperatura) AS temperatura, AVG(umidade) AS umidade "
+                f"FROM leituras WHERE momento >= %s "
+                f"GROUP BY bucket ORDER BY bucket",
+                (intervalo, desde)
             )
             rows = cur.fetchall()
+    
     finally:
         conn_local.close()
 
     return jsonify([
-        {"momento": r[0].isoformat(), "temperatura": r[1], "umidade": r[2]}
+        {"momento": r[0].isoformat(), "temperatura": round(r[1], 1), "umidade": round(r[2], 1)}
         for r in rows
     ])
-
 
 if __name__ == "__main__":
     thread = threading.Thread(target=loop_leitura, daemon=True)

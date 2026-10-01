@@ -7,7 +7,7 @@ export async function buscarLeituraAtual(): Promise<LeituraAtual> {
   return resp.json();
 }
 
-export async function buscarHistorico(limite = 200): Promise<Leitura[]> {
-  const resp = await fetch(`${API_BASE}/readings?limit=${limite}`);
+export async function buscarHistorico(horas: number): Promise<Leitura[]> {
+  const resp = await fetch(`${API_BASE}/readings?horas=${horas}`);
   return resp.json();
 }
